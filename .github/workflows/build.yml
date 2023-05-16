@@ -43,7 +43,7 @@ jobs:
     - run: |
         artifact_name=jsonsort-${{ matrix.target }}
         artifact_path=jsonsort
-        if [[ "${{ matrix.os }}" == "Windows" ]]; then
+        if [[ "${{ matrix.os }}" =~ windows ]]; then
           artifact_name="$artifact_name".exe
           artifact_path="$artifact_path".exe
         fi
