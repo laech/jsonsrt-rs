@@ -11,12 +11,25 @@ env:
 
 jobs:
   build:
-
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        name:
+          - linux-amd64
+          - macos-amd64
+          - macos-aarch64
+          - windows-amd64
+        include:
+          - os: ubuntu-latest
+          - os: windows-latest
+          - os: macos-latest
+          - os: macos-latest
+            build_flags: --target aarch64-apple-darwin
 
     steps:
     - uses: actions/checkout@v3
-    - name: Build
-      run: cargo build --verbose
-    - name: Run tests
-      run: cargo test --verbose
+    - run: cargo build --verbose --release ${{ matrix.build_flags }}
+    - uses: actions/upload-artifact@v3
+      with:
+        name: jsonsort-${{ runner.os }}-${{ runner.arch }}
+        path: target/release/jsonsort
