@@ -39,8 +39,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - run: rustup target add ${{ matrix.target }}
-    - run: cargo build --verbose --release --target ${{ matrix.target }}
+    - run: cargo build --verbose --release --locked --target ${{ matrix.target }}
     - uses: actions/upload-artifact@v3
       with:
         name: jsonsort-${{ runner.os }}-${{ runner.arch }}
-        path: target/release/jsonsort
+        path: target/${{ matrix.target }}/release/jsonsort
