@@ -31,7 +31,7 @@ jobs:
     - run: cargo build --verbose --release --locked --target ${{ matrix.target }}
     - uses: actions/upload-artifact@v3
       with:
-        name: jsonsort-${{ matrix.target }}.zip
+        name: jsonsort-${{ matrix.target }}
         path: |
           target/${{ matrix.target }}/release/jsonsort
           target/${{ matrix.target }}/release/jsonsort.exe
