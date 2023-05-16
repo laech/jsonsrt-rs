@@ -43,4 +43,4 @@ jobs:
     - uses: actions/upload-artifact@v3
       with:
         name: jsonsort-${{ matrix.target }}
-        path: target/${{ matrix.target }}/release/jsonsort
+        path: target/${{ matrix.target }}/release/jsonsort*
