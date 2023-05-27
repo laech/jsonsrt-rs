@@ -1,9 +1,10 @@
 use std::{
+  fmt::Debug,
   io::{self, Bytes, Read},
   iter::Peekable,
 };
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 enum TokenValue {
   BeginObject,
   EndObject,
@@ -12,6 +13,20 @@ enum TokenValue {
   NameSeparator,
   ValueSeparator,
   Value(Vec<u8>),
+}
+
+impl Debug for TokenValue {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    match self {
+      Self::BeginObject => write!(f, "BeginObject"),
+      Self::EndObject => write!(f, "EndObject"),
+      Self::BeginArray => write!(f, "BeginArray"),
+      Self::EndArray => write!(f, "EndArray"),
+      Self::NameSeparator => write!(f, "NameSeparator"),
+      Self::ValueSeparator => write!(f, "ValueSeparator"),
+      Self::Value(x) => write!(f, "Value({})", String::from_utf8_lossy(&x).to_string()),
+    }
+  }
 }
 
 impl TryFrom<u8> for TokenValue {
@@ -30,34 +45,10 @@ impl TryFrom<u8> for TokenValue {
   }
 }
 
-impl ToString for TokenValue {
-  fn to_string(&self) -> String {
-    match self {
-      Self::BeginObject => "BeginObject".to_owned(),
-      Self::EndObject => "EndObject".to_owned(),
-      Self::BeginArray => "BeginArray".to_owned(),
-      Self::EndArray => "EndArray".to_owned(),
-      Self::NameSeparator => "NameSeparator".to_owned(),
-      Self::ValueSeparator => "ValueSeparator".to_owned(),
-      Self::Value(x) => format!("Value({})", String::from_utf8_lossy(&x).to_string()),
-    }
-  }
-}
-
 #[derive(Debug, PartialEq)]
 struct Token {
   value: TokenValue,
   offset: usize,
-}
-
-impl ToString for Token {
-  fn to_string(&self) -> String {
-    format!(
-      "Token {{ {}, offset: {} }}",
-      self.value.to_string(),
-      self.offset
-    )
-  }
 }
 
 struct Lexer<R: Read> {
@@ -178,17 +169,7 @@ mod tests {
       assert_eq!(
         tokens,
         output,
-        "\nexpected: {}\n     got: {}\n   input: {}\n",
-        output
-          .iter()
-          .map(|t| t.to_string())
-          .collect::<Vec<_>>()
-          .join(", "),
-        tokens
-          .iter()
-          .map(|t| t.to_string())
-          .collect::<Vec<_>>()
-          .join(", "),
+        "\n input: {}\n",
         String::from_utf8_lossy(input)
       )
     }
