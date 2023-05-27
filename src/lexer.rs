@@ -5,50 +5,46 @@ use std::{
 };
 
 #[derive(PartialEq)]
-enum TokenValue {
-  BeginObject,
-  EndObject,
-  BeginArray,
-  EndArray,
-  NameSeparator,
-  ValueSeparator,
-  Value(Vec<u8>),
+enum Token {
+  BeginObject(usize),
+  EndObject(usize),
+  BeginArray(usize),
+  EndArray(usize),
+  NameSeparator(usize),
+  ValueSeparator(usize),
+  Value(usize, Vec<u8>),
 }
 
-impl Debug for TokenValue {
+impl Debug for Token {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     match self {
-      Self::BeginObject => write!(f, "BeginObject"),
-      Self::EndObject => write!(f, "EndObject"),
-      Self::BeginArray => write!(f, "BeginArray"),
-      Self::EndArray => write!(f, "EndArray"),
-      Self::NameSeparator => write!(f, "NameSeparator"),
-      Self::ValueSeparator => write!(f, "ValueSeparator"),
-      Self::Value(x) => write!(f, "Value({})", String::from_utf8_lossy(&x).to_string()),
+      Self::BeginObject(offset) => f.debug_tuple("BeginObject").field(offset).finish(),
+      Self::EndObject(offset) => f.debug_tuple("EndObject").field(offset).finish(),
+      Self::BeginArray(offset) => f.debug_tuple("BeginArray").field(offset).finish(),
+      Self::EndArray(offset) => f.debug_tuple("EndArray").field(offset).finish(),
+      Self::NameSeparator(offset) => f.debug_tuple("NameSeparator").field(offset).finish(),
+      Self::ValueSeparator(offset) => f.debug_tuple("ValueSeparator").field(offset).finish(),
+      Self::Value(offset, value) => f
+        .debug_tuple("Value")
+        .field(offset)
+        .field(&String::from_utf8_lossy(&value))
+        .finish(),
     }
   }
 }
 
-impl TryFrom<u8> for TokenValue {
-  type Error = ();
-
-  fn try_from(value: u8) -> Result<Self, Self::Error> {
-    match value {
-      b'{' => Ok(Self::BeginObject),
-      b'}' => Ok(Self::EndObject),
-      b'[' => Ok(Self::BeginArray),
-      b']' => Ok(Self::EndArray),
-      b':' => Ok(Self::NameSeparator),
-      b',' => Ok(Self::ValueSeparator),
-      _ => Err(()),
+impl Token {
+  fn from(offset: usize, b: u8) -> Option<Token> {
+    match b {
+      b'{' => Some(Self::BeginObject(offset)),
+      b'}' => Some(Self::EndObject(offset)),
+      b'[' => Some(Self::BeginArray(offset)),
+      b']' => Some(Self::EndArray(offset)),
+      b':' => Some(Self::NameSeparator(offset)),
+      b',' => Some(Self::ValueSeparator(offset)),
+      _ => None,
     }
   }
-}
-
-#[derive(Debug, PartialEq)]
-struct Token {
-  value: TokenValue,
-  offset: usize,
 }
 
 struct Lexer<R: Read> {
@@ -72,11 +68,10 @@ impl<R: Read> Lexer<R> {
     }
     match self.data.next()? {
       Err(e) => return Some(Err(e)),
-      Ok(b) => match TokenValue::try_from(b) {
-        Ok(value) => {
-          let offset = self.offset;
+      Ok(b) => match Token::from(self.offset, b) {
+        Some(token) => {
           self.offset += 1;
-          return Some(Ok(Token { value, offset }));
+          return Some(Ok(token));
         }
         _ => {
           self.buffer.clear();
@@ -113,10 +108,9 @@ impl<R: Read> Lexer<R> {
           if b == b'\\' {
             escape = !escape;
           } else if !escape && b == b'"' {
-            let value = TokenValue::Value(self.buffer.clone());
             let offset = self.offset;
             self.offset += self.buffer.len();
-            return Some(Ok(Token { value, offset }));
+            return Some(Ok(Token::Value(offset, self.buffer.clone())));
           }
         }
         Some(Err(e)) => return Some(Err(e)),
@@ -141,10 +135,9 @@ impl<R: Read> Lexer<R> {
           self.buffer.push(self.data.next()?.unwrap());
         }
         None | Some(Ok(_)) => {
-          let value = TokenValue::Value(self.buffer.clone());
           let offset = self.offset;
           self.offset += self.buffer.len();
-          return Some(Ok(Token { value, offset }));
+          return Some(Ok(Token::Value(offset, self.buffer.clone())));
         }
       }
     }
@@ -155,7 +148,7 @@ impl<R: Read> Lexer<R> {
 mod tests {
   use super::Lexer;
   use super::Token;
-  use super::TokenValue::*;
+  use super::Token::*;
   use std::io;
   use std::io::Read;
 
@@ -169,7 +162,7 @@ mod tests {
       assert_eq!(
         tokens,
         output,
-        "\n input: {}\n",
+        "\n input: `{}`\n",
         String::from_utf8_lossy(input)
       )
     }
@@ -189,87 +182,38 @@ mod tests {
 
   fn lexer_tests() -> Vec<(&'static [u8], Vec<Token>)> {
     vec![
-      (b"{", vec![begin_object(0)]),
-      (b"}", vec![end_object(0)]),
-      (b"[", vec![begin_array(0)]),
-      (b"]", vec![end_array(0)]),
-      (b":", vec![name_separator(0)]),
-      (b",", vec![value_separator(0)]),
-      (b"\"\"", vec![value(0, b"\"\"")]),
-      (b" \"hello\"", vec![value(1, b"\"hello\"")]),
-      (b"123", vec![value(0, b"123")]),
-      (b"123 ", vec![value(0, b"123")]),
-      (b"{}", vec![begin_object(0), end_object(1)]),
-      (b"[]", vec![begin_array(0), end_array(1)]),
+      (b"{", vec![BeginObject(0)]),
+      (b"}", vec![EndObject(0)]),
+      (b"[", vec![BeginArray(0)]),
+      (b"]", vec![EndArray(0)]),
+      (b":", vec![NameSeparator(0)]),
+      (b",", vec![ValueSeparator(0)]),
+      (b"\"\"", vec![Value(0, b"\"\"".to_vec())]),
+      (b" \"hello\"", vec![Value(1, b"\"hello\"".to_vec())]),
+      (b"123", vec![Value(0, b"123".to_vec())]),
+      (b"123 ", vec![Value(0, b"123".to_vec())]),
+      (b"{}", vec![BeginObject(0), EndObject(1)]),
+      (b"[]", vec![BeginArray(0), EndArray(1)]),
       (
         b"{\"a\": 1}",
         vec![
-          begin_object(0),
-          value(1, b"\"a\""),
-          name_separator(4),
-          value(6, b"1"),
-          end_object(7),
+          BeginObject(0),
+          Value(1, b"\"a\"".to_vec()),
+          NameSeparator(4),
+          Value(6, b"1".to_vec()),
+          EndObject(7),
         ],
       ),
       (
         b"[true, null]",
         vec![
-          begin_array(0),
-          value(1, b"true"),
-          value_separator(5),
-          value(7, b"null"),
-          end_array(11),
+          BeginArray(0),
+          Value(1, b"true".to_vec()),
+          ValueSeparator(5),
+          Value(7, b"null".to_vec()),
+          EndArray(11),
         ],
       ),
     ]
-  }
-
-  fn begin_object(offset: usize) -> Token {
-    Token {
-      value: BeginObject,
-      offset,
-    }
-  }
-
-  fn end_object(offset: usize) -> Token {
-    Token {
-      value: EndObject,
-      offset,
-    }
-  }
-
-  fn begin_array(offset: usize) -> Token {
-    Token {
-      value: BeginArray,
-      offset,
-    }
-  }
-
-  fn end_array(offset: usize) -> Token {
-    Token {
-      value: EndArray,
-      offset,
-    }
-  }
-
-  fn name_separator(offset: usize) -> Token {
-    Token {
-      value: NameSeparator,
-      offset,
-    }
-  }
-
-  fn value_separator(offset: usize) -> Token {
-    Token {
-      value: ValueSeparator,
-      offset,
-    }
-  }
-
-  fn value(offset: usize, value: &'static [u8]) -> Token {
-    Token {
-      value: Value(value.into()),
-      offset,
-    }
   }
 }
