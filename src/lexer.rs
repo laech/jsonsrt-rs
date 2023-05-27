@@ -155,12 +155,8 @@ mod tests {
   #[test]
   fn lexer() {
     for (input, output) in lexer_tests() {
-      let tokens = read_all_tokens(input).unwrap();
-
-      // t.Fatalf("\nexpected: %s\n     got: %s\n   input: %s",
-      // 	test.output, tokens, string(test.input))
       assert_eq!(
-        tokens,
+        read_all_tokens(input).unwrap(),
         output,
         "\n input: `{}`\n",
         String::from_utf8_lossy(input)
