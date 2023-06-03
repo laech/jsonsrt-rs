@@ -1,10 +1,10 @@
 use std::{
-  fmt::Debug,
-  io::{self, Bytes, Read},
+  io::{self},
   iter::Peekable,
+  str::Chars,
 };
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 enum Token {
   BeginObject(usize),
   EndObject(usize),
@@ -12,49 +12,31 @@ enum Token {
   EndArray(usize),
   NameSeparator(usize),
   ValueSeparator(usize),
-  Value(usize, Vec<u8>),
-}
-
-impl Debug for Token {
-  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-    match self {
-      Self::BeginObject(offset) => f.debug_tuple("BeginObject").field(offset).finish(),
-      Self::EndObject(offset) => f.debug_tuple("EndObject").field(offset).finish(),
-      Self::BeginArray(offset) => f.debug_tuple("BeginArray").field(offset).finish(),
-      Self::EndArray(offset) => f.debug_tuple("EndArray").field(offset).finish(),
-      Self::NameSeparator(offset) => f.debug_tuple("NameSeparator").field(offset).finish(),
-      Self::ValueSeparator(offset) => f.debug_tuple("ValueSeparator").field(offset).finish(),
-      Self::Value(offset, value) => f
-        .debug_tuple("Value")
-        .field(offset)
-        .field(&String::from_utf8_lossy(&value))
-        .finish(),
-    }
-  }
+  Value(usize, String),
 }
 
 impl Token {
-  fn from(offset: usize, b: u8) -> Option<Token> {
-    match b {
-      b'{' => Some(Self::BeginObject(offset)),
-      b'}' => Some(Self::EndObject(offset)),
-      b'[' => Some(Self::BeginArray(offset)),
-      b']' => Some(Self::EndArray(offset)),
-      b':' => Some(Self::NameSeparator(offset)),
-      b',' => Some(Self::ValueSeparator(offset)),
+  fn from(offset: usize, c: char) -> Option<Token> {
+    match c {
+      '{' => Some(Self::BeginObject(offset)),
+      '}' => Some(Self::EndObject(offset)),
+      '[' => Some(Self::BeginArray(offset)),
+      ']' => Some(Self::EndArray(offset)),
+      ':' => Some(Self::NameSeparator(offset)),
+      ',' => Some(Self::ValueSeparator(offset)),
       _ => None,
     }
   }
 }
 
-struct Lexer<R: Read> {
-  data: Peekable<Bytes<R>>,
-  buffer: Vec<u8>,
+struct Lexer<'a> {
+  data: Peekable<Chars<'a>>,
+  buffer: Vec<char>,
   offset: usize,
 }
 
-impl<R: Read> Lexer<R> {
-  fn new(data: Bytes<R>) -> Lexer<R> {
+impl Lexer<'_> {
+  fn new(data: Chars) -> Lexer {
     Lexer {
       data: data.peekable(),
       buffer: Vec::new(),
@@ -63,38 +45,32 @@ impl<R: Read> Lexer<R> {
   }
 
   fn next(&mut self) -> Option<io::Result<Token>> {
-    if let Err(e) = self.skip_spaces()? {
-      return Some(Err(e));
-    }
-    match self.data.next()? {
-      Err(e) => return Some(Err(e)),
-      Ok(b) => match Token::from(self.offset, b) {
-        Some(token) => {
-          self.offset += 1;
-          return Some(Ok(token));
+    self.skip_spaces()?;
+    let c = self.data.next()?;
+    match Token::from(self.offset, c) {
+      Some(token) => {
+        self.offset += 1;
+        return Some(Ok(token));
+      }
+      _ => {
+        self.buffer.clear();
+        self.buffer.push(c);
+        if c == '"' {
+          return self.read_string();
+        } else {
+          return self.read_value().map(Ok);
         }
-        _ => {
-          self.buffer.clear();
-          self.buffer.push(b);
-          if b == b'"' {
-            return self.read_string();
-          } else {
-            return self.read_value();
-          }
-        }
-      },
+      }
     }
   }
 
-  fn skip_spaces(&mut self) -> Option<io::Result<()>> {
+  fn skip_spaces(&mut self) -> Option<()> {
     loop {
-      match self.data.peek()? {
-        Ok(b) if (*b as char).is_whitespace() => {
-          self.data.next();
-          self.offset += 1;
-        }
-        Ok(_) => return Some(Ok(())),
-        Err(_) => return Some(Err(self.data.next()?.unwrap_err())),
+      if self.data.peek()?.is_whitespace() {
+        self.data.next();
+        self.offset += 1;
+      } else {
+        return Some(());
       }
     }
   }
@@ -103,41 +79,42 @@ impl<R: Read> Lexer<R> {
     let mut escape = false;
     loop {
       match self.data.next() {
-        Some(Ok(b)) => {
-          self.buffer.push(b);
-          if b == b'\\' {
+        Some(c) => {
+          self.buffer.push(c);
+          if c == '\\' {
             escape = !escape;
-          } else if !escape && b == b'"' {
-            let offset = self.offset;
-            self.offset += self.buffer.len();
-            return Some(Ok(Token::Value(offset, self.buffer.clone())));
+          } else {
+            if !escape && c == '"' {
+              let offset = self.offset;
+              self.offset += self.buffer.len();
+              return Some(Ok(Token::Value(offset, self.buffer.iter().collect())));
+            }
+            escape = false
           }
         }
-        Some(Err(e)) => return Some(Err(e)),
         None => return Some(Err(io::Error::new(io::ErrorKind::UnexpectedEof, "EOF"))),
       }
     }
   }
 
-  fn read_value(&mut self) -> Option<io::Result<Token>> {
+  fn read_value(&mut self) -> Option<Token> {
     loop {
       match self.data.peek() {
-        Some(Err(_)) => return Some(Err(self.data.next()?.unwrap_err())),
-        Some(Ok(b))
-          if !(*b as char).is_whitespace()
-            && *b != b'{'
-            && *b != b'}'
-            && *b != b'['
-            && *b != b']'
-            && *b != b','
-            && *b != b':' =>
+        Some(c)
+          if !c.is_whitespace()
+            && *c != '{'
+            && *c != '}'
+            && *c != '['
+            && *c != ']'
+            && *c != ','
+            && *c != ':' =>
         {
-          self.buffer.push(self.data.next()?.unwrap());
+          self.buffer.push(self.data.next()?);
         }
-        None | Some(Ok(_)) => {
+        None | Some(_) => {
           let offset = self.offset;
           self.offset += self.buffer.len();
-          return Some(Ok(Token::Value(offset, self.buffer.clone())));
+          return Some(Token::Value(offset, self.buffer.iter().collect()));
         }
       }
     }
@@ -150,7 +127,6 @@ mod tests {
   use super::Token;
   use super::Token::*;
   use std::io;
-  use std::io::Read;
 
   #[test]
   fn lexer() {
@@ -159,13 +135,13 @@ mod tests {
         read_all_tokens(input).unwrap(),
         output,
         "\n input: `{}`\n",
-        String::from_utf8_lossy(input)
+        input
       )
     }
   }
 
-  fn read_all_tokens(data: &'static [u8]) -> io::Result<Vec<Token>> {
-    let mut lexer = Lexer::new(data.bytes());
+  fn read_all_tokens(data: &'static str) -> io::Result<Vec<Token>> {
+    let mut lexer = Lexer::new(data.chars());
     let mut tokens = Vec::new();
     loop {
       match lexer.next() {
@@ -176,37 +152,38 @@ mod tests {
     }
   }
 
-  fn lexer_tests() -> Vec<(&'static [u8], Vec<Token>)> {
+  fn lexer_tests() -> Vec<(&'static str, Vec<Token>)> {
     vec![
-      (b"{", vec![BeginObject(0)]),
-      (b"}", vec![EndObject(0)]),
-      (b"[", vec![BeginArray(0)]),
-      (b"]", vec![EndArray(0)]),
-      (b":", vec![NameSeparator(0)]),
-      (b",", vec![ValueSeparator(0)]),
-      (b"\"\"", vec![Value(0, b"\"\"".to_vec())]),
-      (b" \"hello\"", vec![Value(1, b"\"hello\"".to_vec())]),
-      (b"123", vec![Value(0, b"123".to_vec())]),
-      (b"123 ", vec![Value(0, b"123".to_vec())]),
-      (b"{}", vec![BeginObject(0), EndObject(1)]),
-      (b"[]", vec![BeginArray(0), EndArray(1)]),
+      ("{", vec![BeginObject(0)]),
+      ("}", vec![EndObject(0)]),
+      ("[", vec![BeginArray(0)]),
+      ("]", vec![EndArray(0)]),
+      (":", vec![NameSeparator(0)]),
+      (",", vec![ValueSeparator(0)]),
+      ("\"\"", vec![Value(0, "\"\"".to_owned())]),
+      (" \"hello\"", vec![Value(1, "\"hello\"".to_owned())]),
+      (" \"he\\\"llo\"", vec![Value(1, "\"he\\\"llo\"".to_owned())]),
+      ("123", vec![Value(0, "123".to_owned())]),
+      ("123 ", vec![Value(0, "123".to_owned())]),
+      ("{}", vec![BeginObject(0), EndObject(1)]),
+      ("[]", vec![BeginArray(0), EndArray(1)]),
       (
-        b"{\"a\": 1}",
+        "{\"a\": 1}",
         vec![
           BeginObject(0),
-          Value(1, b"\"a\"".to_vec()),
+          Value(1, "\"a\"".to_owned()),
           NameSeparator(4),
-          Value(6, b"1".to_vec()),
+          Value(6, "1".to_owned()),
           EndObject(7),
         ],
       ),
       (
-        b"[true, null]",
+        "[true, null]",
         vec![
           BeginArray(0),
-          Value(1, b"true".to_vec()),
+          Value(1, "true".to_owned()),
           ValueSeparator(5),
-          Value(7, b"null".to_vec()),
+          Value(7, "null".to_owned()),
           EndArray(11),
         ],
       ),
