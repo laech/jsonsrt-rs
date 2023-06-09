@@ -23,7 +23,7 @@ impl Jsonish<'_> {
     match self {
       Value(_) => {}
       Object(xs) => xs.sort_by_key(|x| x.0),
-      Array(xs) => xs.iter_mut().for_each(|x| x.sort_by_name()),
+      Array(xs) => xs.iter_mut().for_each(Self::sort_by_name),
     }
   }
 
