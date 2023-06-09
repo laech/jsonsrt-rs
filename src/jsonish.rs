@@ -2,23 +2,113 @@ use nom::{
   branch::alt,
   bytes::complete::{tag, take_while, take_while1},
   combinator::{map, peek},
-  error::VerboseError,
+  error::{convert_error, VerboseError},
   multi::{fold_many0, separated_list0},
   sequence::{delimited, separated_pair},
   IResult,
 };
+use std::cmp::Ordering;
 
 #[derive(Debug, PartialEq)]
-enum Jsonish<'a> {
+pub enum Jsonish<'a> {
   Object(Vec<(&'a str, Jsonish<'a>)>),
   Array(Vec<Jsonish<'a>>),
   Value(&'a str),
 }
 
-type Result<'a, O> = IResult<&'a str, O, VerboseError<&'a str>>;
+impl Jsonish<'_> {
+  pub fn sort_by_name(&mut self) {
+    match self {
+      Jsonish::Value(_) => {}
+      Jsonish::Object(xs) => xs.sort_by_key(|x| x.0),
+      Jsonish::Array(xs) => xs.iter_mut().for_each(|x| x.sort_by_name()),
+    }
+  }
 
-fn parse(input: &str) -> Result<Jsonish> {
-  jsonish()(input)
+  pub fn sort_by_value(&mut self, name: &str) {
+    let qname = format!("\"{}\"", name);
+    match self {
+      Jsonish::Value(_) => {}
+      Jsonish::Object(xs) => xs.iter_mut().for_each(|(_, x)| x.sort_by_value(name)),
+      Jsonish::Array(xs) => {
+        xs.iter_mut().for_each(|x| x.sort_by_value(name));
+        xs.sort_by(|a, b| match (a, b) {
+          (Jsonish::Object(a), Jsonish::Object(b)) => {
+            let a = a.iter().find(|(key, _)| *key == qname).map(|x| x.0);
+            let b = b.iter().find(|(key, _)| *key == qname).map(|x| x.0);
+            match (a, b) {
+              (Some(a), Some(b)) => a.cmp(b),
+              _ => Ordering::Equal,
+            }
+          }
+          _ => Ordering::Equal,
+        })
+      }
+    }
+  }
+}
+
+impl ToString for Jsonish<'_> {
+  fn to_string(&self) -> String {
+    let mut buf = String::new();
+    self.format(&mut buf, "  ", 0, false);
+    buf
+  }
+}
+
+impl Jsonish<'_> {
+  fn format(&self, buf: &mut String, indent: &str, level: usize, apply_initial_indent: bool) {
+    let print_indent =
+      |level: usize, buf: &mut String| (0..level).for_each(|_| buf.push_str(indent));
+
+    if apply_initial_indent {
+      print_indent(level, buf);
+    }
+
+    match self {
+      Jsonish::Value(x) => buf.push_str(x),
+      Jsonish::Array(xs) if xs.is_empty() => buf.push_str("[]"),
+      Jsonish::Array(xs) => {
+        buf.push_str("[\n");
+        xs.iter().enumerate().for_each(|(i, x)| {
+          x.format(buf, indent, level + 1, true);
+          if i < xs.len() - 1 {
+            buf.push_str(",\n")
+          }
+        });
+        buf.push_str("\n");
+        print_indent(level, buf);
+        buf.push_str("]");
+      }
+      Jsonish::Object(xs) if xs.is_empty() => buf.push_str("{}"),
+      Jsonish::Object(xs) => {
+        buf.push_str("{\n");
+        xs.iter().enumerate().for_each(|(i, (key, val))| {
+          print_indent(level + 1, buf);
+          buf.push_str(key);
+          buf.push_str(": ");
+          val.format(buf, indent, level + 1, false);
+          if i < xs.len() - 1 {
+            buf.push_str(",\n")
+          }
+        });
+        buf.push_str("\n");
+        print_indent(level, buf);
+        buf.push_str("}");
+      }
+    }
+  }
+}
+
+pub type Result<'a, O> = IResult<&'a str, O, VerboseError<&'a str>>;
+
+pub fn parse(input: &str) -> std::result::Result<Jsonish, String> {
+  match jsonish()(input) {
+    Ok((_, node)) => Ok(node),
+    Err(nom::Err::Error(e)) => Err(convert_error(input, e)),
+    Err(nom::Err::Failure(e)) => Err(convert_error(input, e)),
+    Err(nom::Err::Incomplete(_)) => panic!("unexpected incomplete error"),
+  }
 }
 
 fn jsonish() -> impl Fn(&str) -> Result<Jsonish> {
@@ -104,40 +194,21 @@ fn space() -> impl Fn(&str) -> Result<&str> {
 
 #[cfg(test)]
 mod tests {
-  use nom::error::convert_error;
-
   use super::Jsonish;
   use super::Jsonish::*;
 
   #[test]
   fn parse() {
     for (input, expected) in parser_tests() {
-      match super::parse(input) {
-        Ok(actual) => {
-          let expected = ("", expected);
-          if actual != expected {
-            assert!(
-              false,
-              "expected: {:?}\n  actual: {:?}\n   input: `{}`\n",
-              expected,
-              actual,
-              input.replace("\n", "\\n"),
-            );
-          }
-        }
-        Err(e) => {
-          assert!(
-            false,
-            "error: {}\ninput: `{}`\n",
-            if let nom::Err::Error(e) = e {
-              convert_error(input, e)
-            } else {
-              e.to_string()
-            },
-            input.replace("\n", "\\n")
-          );
-        }
-      }
+      let actual = super::parse(input);
+      assert_eq!(
+        actual.as_ref(),
+        Ok(&expected),
+        "expected: {:?}\n  actual: {:?}\n   input: `{}`\n",
+        expected,
+        actual,
+        input.replace("\n", "\\n"),
+      );
     }
   }
 
