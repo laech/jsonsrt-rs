@@ -5,9 +5,11 @@ use nom::{
   error::{convert_error, VerboseError},
   multi::{fold_many0, separated_list0},
   sequence::{delimited, separated_pair},
+  Err::{Error, Failure, Incomplete},
   IResult,
 };
 use std::cmp::Ordering;
+use Jsonish::{Array, Object, Value};
 
 #[derive(Debug, PartialEq)]
 pub enum Jsonish<'a> {
@@ -19,21 +21,21 @@ pub enum Jsonish<'a> {
 impl Jsonish<'_> {
   pub fn sort_by_name(&mut self) {
     match self {
-      Jsonish::Value(_) => {}
-      Jsonish::Object(xs) => xs.sort_by_key(|x| x.0),
-      Jsonish::Array(xs) => xs.iter_mut().for_each(|x| x.sort_by_name()),
+      Value(_) => {}
+      Object(xs) => xs.sort_by_key(|x| x.0),
+      Array(xs) => xs.iter_mut().for_each(|x| x.sort_by_name()),
     }
   }
 
   pub fn sort_by_value(&mut self, name: &str) {
     let qname = format!("\"{}\"", name);
     match self {
-      Jsonish::Value(_) => {}
-      Jsonish::Object(xs) => xs.iter_mut().for_each(|(_, x)| x.sort_by_value(name)),
-      Jsonish::Array(xs) => {
+      Value(_) => {}
+      Object(xs) => xs.iter_mut().for_each(|(_, x)| x.sort_by_value(name)),
+      Array(xs) => {
         xs.iter_mut().for_each(|x| x.sort_by_value(name));
         xs.sort_by(|a, b| match (a, b) {
-          (Jsonish::Object(a), Jsonish::Object(b)) => {
+          (Object(a), Object(b)) => {
             let a = a.iter().find(|(key, _)| *key == qname).map(|x| x.0);
             let b = b.iter().find(|(key, _)| *key == qname).map(|x| x.0);
             match (a, b) {
@@ -66,9 +68,9 @@ impl Jsonish<'_> {
     }
 
     match self {
-      Jsonish::Value(x) => buf.push_str(x),
-      Jsonish::Array(xs) if xs.is_empty() => buf.push_str("[]"),
-      Jsonish::Array(xs) => {
+      Value(x) => buf.push_str(x),
+      Array(xs) if xs.is_empty() => buf.push_str("[]"),
+      Array(xs) => {
         buf.push_str("[\n");
         xs.iter().enumerate().for_each(|(i, x)| {
           x.format(buf, indent, level + 1, true);
@@ -80,8 +82,8 @@ impl Jsonish<'_> {
         print_indent(level, buf);
         buf.push_str("]");
       }
-      Jsonish::Object(xs) if xs.is_empty() => buf.push_str("{}"),
-      Jsonish::Object(xs) => {
+      Object(xs) if xs.is_empty() => buf.push_str("{}"),
+      Object(xs) => {
         buf.push_str("{\n");
         xs.iter().enumerate().for_each(|(i, (key, val))| {
           print_indent(level + 1, buf);
@@ -105,9 +107,9 @@ pub type Result<'a, O> = IResult<&'a str, O, VerboseError<&'a str>>;
 pub fn parse(input: &str) -> std::result::Result<Jsonish, String> {
   match jsonish()(input) {
     Ok((_, node)) => Ok(node),
-    Err(nom::Err::Error(e)) => Err(convert_error(input, e)),
-    Err(nom::Err::Failure(e)) => Err(convert_error(input, e)),
-    Err(nom::Err::Incomplete(_)) => panic!("unexpected incomplete error"),
+    Err(Error(e)) => Err(convert_error(input, e)),
+    Err(Failure(e)) => Err(convert_error(input, e)),
+    Err(Incomplete(_)) => panic!("unexpected incomplete error"),
   }
 }
 
@@ -123,7 +125,7 @@ fn array() -> impl Fn(&str) -> Result<Jsonish> {
         separated_list0(ws(tag(",")), jsonish()),
         ws(tag("]")),
       ),
-      Jsonish::Array,
+      Array,
     )(input)
   }
 }
@@ -139,7 +141,7 @@ fn object() -> impl Fn(&str) -> Result<Jsonish> {
         ),
         ws(tag("}")),
       ),
-      Jsonish::Object,
+      Object,
     )(input)
   }
 }
@@ -154,7 +156,7 @@ fn value() -> impl Fn(&str) -> Result<Jsonish> {
           stringish()(input)
         }
       },
-      Jsonish::Value,
+      Value,
     )(input)
   }
 }
@@ -195,7 +197,7 @@ fn space() -> impl Fn(&str) -> Result<&str> {
 #[cfg(test)]
 mod tests {
   use super::Jsonish;
-  use super::Jsonish::*;
+  use super::*;
 
   #[test]
   fn parse() {
