@@ -1,11 +1,15 @@
 use clap::Parser;
+use parse::parse;
 use std::{
   fs,
   io::{self, Read},
   process::exit,
 };
 
-mod jsonish;
+mod format;
+mod node;
+mod parse;
+mod sort;
 
 /// Sort JSON contents
 #[derive(Debug, Parser)]
@@ -34,7 +38,7 @@ fn main() -> io::Result<()> {
     io::stdin().read_to_string(&mut input)?;
   }
 
-  match jsonish::parse(&input) {
+  match parse(&input) {
     Ok(mut node) => {
       if args.sort_by_name {
         node.sort_by_name();

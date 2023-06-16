@@ -1,3 +1,4 @@
+use crate::node::Node;
 use nom::{
   branch::alt,
   bytes::complete::{tag, take_while, take_while1},
@@ -8,104 +9,12 @@ use nom::{
   Err::{Error, Failure, Incomplete},
   IResult,
 };
-use std::cmp::Ordering;
-use Jsonish::{Array, Object, Value};
-
-#[derive(Debug, PartialEq)]
-pub enum Jsonish<'a> {
-  Object(Vec<(&'a str, Jsonish<'a>)>),
-  Array(Vec<Jsonish<'a>>),
-  Value(&'a str),
-}
-
-impl Jsonish<'_> {
-  pub fn sort_by_name(&mut self) {
-    match self {
-      Value(_) => {}
-      Object(xs) => xs.sort_by_key(|x| x.0),
-      Array(xs) => xs.iter_mut().for_each(Self::sort_by_name),
-    }
-  }
-
-  pub fn sort_by_value(&mut self, name: &str) {
-    let qname = format!("\"{}\"", name);
-    match self {
-      Value(_) => {}
-      Object(xs) => xs.iter_mut().for_each(|(_, x)| x.sort_by_value(name)),
-      Array(xs) => {
-        xs.iter_mut().for_each(|x| x.sort_by_value(name));
-        xs.sort_by(|a, b| match (a, b) {
-          (Object(a), Object(b)) => {
-            let a = a.iter().find(|(key, _)| *key == qname).map(|x| x.0);
-            let b = b.iter().find(|(key, _)| *key == qname).map(|x| x.0);
-            match (a, b) {
-              (Some(a), Some(b)) => a.cmp(b),
-              _ => Ordering::Equal,
-            }
-          }
-          _ => Ordering::Equal,
-        })
-      }
-    }
-  }
-}
-
-impl ToString for Jsonish<'_> {
-  fn to_string(&self) -> String {
-    let mut buf = String::new();
-    self.format(&mut buf, "  ", 0, false);
-    buf
-  }
-}
-
-impl Jsonish<'_> {
-  fn format(&self, buf: &mut String, indent: &str, level: usize, apply_initial_indent: bool) {
-    let print_indent =
-      |level: usize, buf: &mut String| (0..level).for_each(|_| buf.push_str(indent));
-
-    if apply_initial_indent {
-      print_indent(level, buf);
-    }
-
-    match self {
-      Value(x) => buf.push_str(x),
-      Array(xs) if xs.is_empty() => buf.push_str("[]"),
-      Array(xs) => {
-        buf.push_str("[\n");
-        xs.iter().enumerate().for_each(|(i, x)| {
-          x.format(buf, indent, level + 1, true);
-          if i < xs.len() - 1 {
-            buf.push_str(",\n")
-          }
-        });
-        buf.push_str("\n");
-        print_indent(level, buf);
-        buf.push_str("]");
-      }
-      Object(xs) if xs.is_empty() => buf.push_str("{}"),
-      Object(xs) => {
-        buf.push_str("{\n");
-        xs.iter().enumerate().for_each(|(i, (key, val))| {
-          print_indent(level + 1, buf);
-          buf.push_str(key);
-          buf.push_str(": ");
-          val.format(buf, indent, level + 1, false);
-          if i < xs.len() - 1 {
-            buf.push_str(",\n")
-          }
-        });
-        buf.push_str("\n");
-        print_indent(level, buf);
-        buf.push_str("}");
-      }
-    }
-  }
-}
+use Node::{Array, Object, Value};
 
 pub type Result<'a, O> = IResult<&'a str, O, VerboseError<&'a str>>;
 
-pub fn parse(input: &str) -> std::result::Result<Jsonish, String> {
-  match jsonish()(input) {
+pub fn parse(input: &str) -> std::result::Result<Node, String> {
+  match node()(input) {
     Ok((_, node)) => Ok(node),
     Err(Error(e)) => Err(convert_error(input, e)),
     Err(Failure(e)) => Err(convert_error(input, e)),
@@ -113,16 +22,16 @@ pub fn parse(input: &str) -> std::result::Result<Jsonish, String> {
   }
 }
 
-fn jsonish() -> impl Fn(&str) -> Result<Jsonish> {
+fn node() -> impl Fn(&str) -> Result<Node> {
   |input| ws(alt((object(), array(), value())))(input)
 }
 
-fn array() -> impl Fn(&str) -> Result<Jsonish> {
+fn array() -> impl Fn(&str) -> Result<Node> {
   |input| {
     map(
       delimited(
         ws(tag("[")),
-        separated_list0(ws(tag(",")), jsonish()),
+        separated_list0(ws(tag(",")), node()),
         ws(tag("]")),
       ),
       Array,
@@ -130,15 +39,12 @@ fn array() -> impl Fn(&str) -> Result<Jsonish> {
   }
 }
 
-fn object() -> impl Fn(&str) -> Result<Jsonish> {
+fn object() -> impl Fn(&str) -> Result<Node> {
   |input| {
     map(
       delimited(
         ws(tag("{")),
-        separated_list0(
-          ws(tag(",")),
-          separated_pair(string(), ws(tag(":")), jsonish()),
-        ),
+        separated_list0(ws(tag(",")), separated_pair(string(), ws(tag(":")), node())),
         ws(tag("}")),
       ),
       Object,
@@ -146,7 +52,7 @@ fn object() -> impl Fn(&str) -> Result<Jsonish> {
   }
 }
 
-fn value() -> impl Fn(&str) -> Result<Jsonish> {
+fn value() -> impl Fn(&str) -> Result<Node> {
   |input| {
     map(
       |input| {
@@ -196,7 +102,7 @@ fn space() -> impl Fn(&str) -> Result<&str> {
 
 #[cfg(test)]
 mod tests {
-  use super::Jsonish;
+  use super::Node;
   use super::*;
 
   #[test]
@@ -214,7 +120,7 @@ mod tests {
     }
   }
 
-  fn parser_tests() -> Vec<(&'static str, Jsonish<'static>)> {
+  fn parser_tests() -> Vec<(&'static str, Node<'static>)> {
     vec![
       ("true", Value("true")),
       (" true", Value("true")),
