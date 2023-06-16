@@ -168,7 +168,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonsort"
+name = "jsonsrt"
 version = "0.1.0"
 dependencies = [
  "clap",

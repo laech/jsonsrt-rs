@@ -1,6 +1,6 @@
 Sort JSON contents
 
-Usage: jsonsort [OPTIONS] [FILE]
+Usage: jsonsrt [OPTIONS] [FILE]
 
 Arguments:
   [FILE]  File to process, otherwise uses stdin/stdout

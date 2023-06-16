@@ -41,11 +41,11 @@ jobs:
       - run: cargo build --verbose --release --locked --target ${{ matrix.target }}
       - uses: actions/upload-artifact@v3
         with:
-          name: jsonsort-${{ matrix.target }}
+          name: jsonsrt-${{ matrix.target }}
           if-no-files-found: error
           path: |
-            target/${{ matrix.target }}/release/jsonsort
-            target/${{ matrix.target }}/release/jsonsort.exe
+            target/${{ matrix.target }}/release/jsonsrt
+            target/${{ matrix.target }}/release/jsonsrt.exe
 
   prerelease:
     needs: [build]
@@ -61,11 +61,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v3
       - run: |
-          ls -lR
-          mv -v ./jsonsort-x86_64-unknown-linux-gnu/jsonsrt jsonsrt-linux-x64
-          mv -v ./jsonsort-aarch64-apple-darwin/jsonsrt jsonsrt-macos-aarch64
-          mv -v ./jsonsort-x86_64-apple-darwin/jsonsrt jsonsrt-macos-x64
-          mv -v ./jsonsort-x86_64-pc-windows-msvc/jsonsrt.exe jsonsrt-windows-x64.exe
+          mv -v jsonsrt-x86_64-unknown-linux-gnu/jsonsrt jsonsrt-linux-x64
+          mv -v jsonsrt-aarch64-apple-darwin/jsonsrt jsonsrt-macos-aarch64
+          mv -v jsonsrt-x86_64-apple-darwin/jsonsrt jsonsrt-macos-x64
+          mv -v jsonsrt-x86_64-pc-windows-msvc/jsonsrt.exe jsonsrt-windows-x64.exe
 
       - uses: marvinpinto/action-automatic-releases@v1.2.1
         with:
