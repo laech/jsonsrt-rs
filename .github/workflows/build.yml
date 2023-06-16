@@ -35,3 +35,27 @@ jobs:
         path: |
           target/${{ matrix.target }}/release/jsonsort
           target/${{ matrix.target }}/release/jsonsort.exe
+
+  prerelease:
+    needs: [build]
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/download-artifact@v3
+      - run: |
+          mv -v jsonsort-x86_64-unknown-linux-gnu/jsonsrt jsonsrt-linux-x64
+          mv -v jsonsort-aarch64-apple-darwin/jsonsrt jsonsrt-macos-aarch64
+          mv -v jsonsort-x86_64-apple-darwin/jsonsrt jsonsrt-macos-x64
+          mv -v jsonsort-x86_64-pc-windows-msvc/jsonsrt.exe jsonsrt-windows-x64.exe
+
+      - uses: marvinpinto/action-automatic-releases@v1.2.1
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: jsonsrt-head
+          prerelease: true
+          title: jsonsrt-head
+          files: |
+            jsonsrt-*
