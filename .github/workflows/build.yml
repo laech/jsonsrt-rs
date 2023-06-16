@@ -57,10 +57,10 @@ jobs:
       - uses: actions/download-artifact@v3
       - run: |
           ls -lR
-          mv -v jsonsort-x86_64-unknown-linux-gnu/jsonsrt jsonsrt-linux-x64
-          mv -v jsonsort-aarch64-apple-darwin/jsonsrt jsonsrt-macos-aarch64
-          mv -v jsonsort-x86_64-apple-darwin/jsonsrt jsonsrt-macos-x64
-          mv -v jsonsort-x86_64-pc-windows-msvc/jsonsrt.exe jsonsrt-windows-x64.exe
+          mv -v ./jsonsort-x86_64-unknown-linux-gnu/jsonsrt jsonsrt-linux-x64
+          mv -v ./jsonsort-aarch64-apple-darwin/jsonsrt jsonsrt-macos-aarch64
+          mv -v ./jsonsort-x86_64-apple-darwin/jsonsrt jsonsrt-macos-x64
+          mv -v ./jsonsort-x86_64-pc-windows-msvc/jsonsrt.exe jsonsrt-windows-x64.exe
 
       - uses: marvinpinto/action-automatic-releases@v1.2.1
         with:
