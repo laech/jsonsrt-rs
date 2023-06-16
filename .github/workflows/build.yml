@@ -43,6 +43,10 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main'
 
+    concurrency:
+      group: prerelease
+      cancel-in-progress: true
+
     steps:
       - uses: actions/download-artifact@v3
       - run: |
