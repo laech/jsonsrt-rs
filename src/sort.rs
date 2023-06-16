@@ -20,10 +20,8 @@ impl Node<'_> {
       Array(xs) => {
         xs.iter_mut().for_each(|x| x.sort_by_value(name));
         xs.sort_by(|a, b| {
-          if let (Object(a), Object(b)) = (a, b) {
-            if let (Some(a), Some(b)) = (find_key(a, &name), find_key(b, &name)) {
-              return unquote(a).cmp(unquote(b));
-            }
+          if let (Some(a), Some(b)) = (find_value(a, &name), find_value(b, &name)) {
+            return unquote(a).cmp(unquote(b));
           }
           return Ordering::Equal;
         })
@@ -32,9 +30,16 @@ impl Node<'_> {
   }
 }
 
-fn find_key<'a>(members: &Vec<(&'a str, Node<'a>)>, key: &str) -> Option<&'a str> {
-  let qname = format!("\"{}\"", key);
-  members.iter().find(|(k, _)| *k == qname).map(|x| x.0)
+fn find_value<'a>(node: &'a Node, key: &str) -> Option<&'a str> {
+  if let Object(xs) = node {
+    let qname = format!("\"{}\"", key);
+    xs.iter().find_map(|(k, v)| match v {
+      Value(x) if *k == qname => Some(*x),
+      _ => None,
+    })
+  } else {
+    None
+  }
 }
 
 fn unquote(s: &str) -> &str {
@@ -137,6 +142,108 @@ mod tests {
 
     for (mut actual, expected) in tests {
       actual.sort_by_name();
+      assert_eq!(actual, expected);
+    }
+  }
+
+  #[test]
+  fn sort_by_value() {
+    let tests = [
+      ("", Value("1"), Value("1")),
+      ("", Object(vec![]), Object(vec![])),
+      ("", Array(vec![]), Array(vec![])),
+      (
+        "name",
+        Array(vec![
+          Object(vec![("\"name\"", Value("1"))]),
+          Object(vec![("\"name\"", Value("2"))]),
+        ]),
+        Array(vec![
+          Object(vec![("\"name\"", Value("1"))]),
+          Object(vec![("\"name\"", Value("2"))]),
+        ]),
+      ),
+      (
+        "name",
+        Array(vec![
+          Object(vec![("\"name\"", Value("2"))]),
+          Object(vec![("\"name\"", Value("1"))]),
+        ]),
+        Array(vec![
+          Object(vec![("\"name\"", Value("1"))]),
+          Object(vec![("\"name\"", Value("2"))]),
+        ]),
+      ),
+      (
+        "name",
+        Object(vec![(
+          "\"name\"",
+          Array(vec![
+            Object(vec![("\"name\"", Value("2"))]),
+            Object(vec![("\"name\"", Value("1"))]),
+          ]),
+        )]),
+        Object(vec![(
+          "\"name\"",
+          Array(vec![
+            Object(vec![("\"name\"", Value("1"))]),
+            Object(vec![("\"name\"", Value("2"))]),
+          ]),
+        )]),
+      ),
+      (
+        "a",
+        Array(vec![
+          Object(vec![("\"a\"", Value("1"))]),
+          Object(vec![("\"a\"", Value("2"))]),
+          Object(vec![("\"a\"", Value("0"))]),
+        ]),
+        Array(vec![
+          Object(vec![("\"a\"", Value("0"))]),
+          Object(vec![("\"a\"", Value("1"))]),
+          Object(vec![("\"a\"", Value("2"))]),
+        ]),
+      ),
+      (
+        "a",
+        Array(vec![
+          Object(vec![("\"a\"", Value("\"cmd+h c\""))]),
+          Object(vec![("\"a\"", Value("\"cmd+h\""))]),
+        ]),
+        Array(vec![
+          Object(vec![("\"a\"", Value("\"cmd+h\""))]),
+          Object(vec![("\"a\"", Value("\"cmd+h c\""))]),
+        ]),
+      ),
+      (
+        "a",
+        Array(vec![
+          Object(vec![("\"a\"", Value("1"))]),
+          Object(vec![("\"a\"", Value("0"))]),
+          Object(vec![(
+            "\"b\"",
+            Array(vec![
+              Object(vec![("\"a\"", Value("2"))]),
+              Object(vec![("\"a\"", Value("1"))]),
+            ]),
+          )]),
+        ]),
+        Array(vec![
+          Object(vec![("\"a\"", Value("0"))]),
+          Object(vec![("\"a\"", Value("1"))]),
+          Object(vec![(
+            "\"b\"",
+            Array(vec![
+              Object(vec![("\"a\"", Value("1"))]),
+              Object(vec![("\"a\"", Value("2"))]),
+            ]),
+          )]),
+        ]),
+      ),
+    ];
+
+    for (key, mut actual, expected) in tests {
+      actual.sort_by_value(key);
       assert_eq!(actual, expected);
     }
   }
