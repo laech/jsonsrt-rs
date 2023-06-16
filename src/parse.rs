@@ -1,4 +1,4 @@
-use crate::node::Node;
+use crate::node::Node::{self, Array, Object, Value};
 use nom::{
   branch::alt,
   bytes::complete::{tag, take_while, take_while1},
@@ -9,7 +9,6 @@ use nom::{
   Err::{Error, Failure, Incomplete},
   IResult,
 };
-use Node::{Array, Object, Value};
 
 pub type Result<'a, O> = IResult<&'a str, O, VerboseError<&'a str>>;
 

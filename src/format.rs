@@ -53,3 +53,63 @@ impl Node<'_> {
     }
   }
 }
+
+#[cfg(test)]
+mod tests {
+  use crate::parse::parse;
+
+  #[test]
+  fn format() {
+    for (input, expected) in format_tests() {
+      let actual = parse(input).map(|x| x.to_string());
+      assert_eq!(
+        actual.as_ref(),
+        Ok(&expected.to_owned()),
+        "\n input: `{}`\n",
+        input.replace("\n", "\\n"),
+      );
+    }
+  }
+
+  fn format_tests() -> Vec<(&'static str, &'static str)> {
+    vec![
+      ("null", "null"),
+      (" true", "true"),
+      ("false ", "false"),
+      (" 1 ", "1"),
+      ("\t-2", "-2"),
+      ("-3e10\n", "-3e10"),
+      ("{}", "{}"),
+      ("[]", "[]"),
+      (
+        r#"{"a":"hello"}"#,
+        r#"{
+  "a": "hello"
+}"#,
+      ),
+      (
+        r#"{"a":"hello", "b":  [1, 2 , false]}"#,
+        r#"{
+  "a": "hello",
+  "b": [
+    1,
+    2,
+    false
+  ]
+}"#,
+      ),
+      (
+        r#"["a", "hello", null, { "i": "x"}, -1.000 ]"#,
+        r#"[
+  "a",
+  "hello",
+  null,
+  {
+    "i": "x"
+  },
+  -1.000
+]"#,
+      ),
+    ]
+  }
+}
