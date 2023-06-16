@@ -101,26 +101,11 @@ fn space() -> impl Fn(&str) -> Result<&str> {
 
 #[cfg(test)]
 mod tests {
-  use super::Node;
   use super::*;
 
   #[test]
   fn parse() {
-    for (input, expected) in parser_tests() {
-      let actual = super::parse(input);
-      assert_eq!(
-        actual.as_ref(),
-        Ok(&expected),
-        "expected: {:?}\n  actual: {:?}\n   input: `{}`\n",
-        expected,
-        actual,
-        input.replace("\n", "\\n"),
-      );
-    }
-  }
-
-  fn parser_tests() -> Vec<(&'static str, Node<'static>)> {
-    vec![
+    let tests = vec![
       ("true", Value("true")),
       (" true", Value("true")),
       (" true ", Value("true")),
@@ -223,6 +208,18 @@ mod tests {
         "\"^[^@]+@[^@.]+\\.[^@]+$\"",
         Value("\"^[^@]+@[^@.]+\\.[^@]+$\""),
       ),
-    ]
+    ];
+
+    for (input, expected) in tests {
+      let actual = super::parse(input);
+      assert_eq!(
+        actual.as_ref(),
+        Ok(&expected),
+        "expected: {:?}\n  actual: {:?}\n   input: `{}`\n",
+        expected,
+        actual,
+        input.replace("\n", "\\n"),
+      );
+    }
   }
 }

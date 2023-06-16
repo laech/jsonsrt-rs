@@ -60,19 +60,7 @@ mod tests {
 
   #[test]
   fn format() {
-    for (input, expected) in format_tests() {
-      let actual = parse(input).map(|x| x.to_string());
-      assert_eq!(
-        actual.as_ref(),
-        Ok(&expected.to_owned()),
-        "\n input: `{}`\n",
-        input.replace("\n", "\\n"),
-      );
-    }
-  }
-
-  fn format_tests() -> Vec<(&'static str, &'static str)> {
-    vec![
+    let tests = vec![
       ("null", "null"),
       (" true", "true"),
       ("false ", "false"),
@@ -110,6 +98,16 @@ mod tests {
   -1.000
 ]"#,
       ),
-    ]
+    ];
+
+    for (input, expected) in tests {
+      let actual = parse(input).map(|x| x.to_string());
+      assert_eq!(
+        actual.as_ref(),
+        Ok(&expected.to_owned()),
+        "\n input: `{}`\n",
+        input.replace("\n", "\\n"),
+      );
+    }
   }
 }
