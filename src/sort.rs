@@ -67,6 +67,10 @@ mod tests {
         Object(vec![("1", Value("a")), ("2", Value("b"))]),
       ),
       (
+        Object(vec![("\"a \"", Value("x")), ("\"a\"", Value("x"))]),
+        Object(vec![("\"a\"", Value("x")), ("\"a \"", Value("x"))]),
+      ),
+      (
         Object(vec![
           ("2", Value("b")),
           ("1", Value("a")),
