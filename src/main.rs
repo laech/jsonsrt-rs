@@ -7,15 +7,19 @@ use std::{
 
 mod jsonish;
 
+/// Sort JSON contents
 #[derive(Debug, Parser)]
+#[command(version)]
 struct Args {
+  /// Sort objects by key names
   #[arg(long)]
   sort_by_name: bool,
 
-  #[arg(long)]
+  /// Sort object arrays by comparing the values of KEY
+  #[arg(long, value_name = "KEY")]
   sort_by_value: Option<String>,
 
-  #[arg(long)]
+  /// File to process, otherwise uses stdin/stdout
   file: Option<String>,
 }
 
