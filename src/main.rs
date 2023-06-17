@@ -118,7 +118,6 @@ mod main_tests {
     error::Error,
     fs,
     io::{self, Write},
-    path::Path,
     process::{Command, Stdio},
   };
   use tempfile::NamedTempFile;
@@ -137,60 +136,55 @@ mod main_tests {
     Ok(())
   }
 
-  fn with_temp_file(
-    content: &str,
-    action: impl Fn(&Path) -> Result<(), Box<dyn Error>>,
-  ) -> Result<(), Box<dyn Error>> {
-    let mut temp = NamedTempFile::new()?;
-    temp.write(content.as_bytes())?;
-    temp.flush()?;
-    action(temp.path())
-  }
-
   #[test]
   fn can_use_file() -> Result<(), Box<dyn Error>> {
-    with_temp_file("{ }", |path| {
-      run(Args::try_parse_from(["jsonsrt", path.to_str().unwrap()])?)?;
-      assert_eq!(fs::read_to_string(path)?, "{}\n".to_owned());
-      Ok(())
-    })
+    let mut temp = NamedTempFile::new()?;
+    temp.write(b"{ }")?;
+    temp.flush()?;
+
+    let path = temp.path().to_str().unwrap().to_owned();
+    run(Args::try_parse_from(["jsonsrt", &path])?)?;
+    assert_eq!(fs::read_to_string(&path)?, "{}\n".to_owned());
+    Ok(())
   }
 
   #[test]
   fn can_sort_by_name() -> Result<(), Box<dyn Error>> {
-    with_temp_file(r#"{"1":0,"0":0}"#, |path| {
-      run(Args::try_parse_from([
-        "jsonsrt",
-        "--sort-by-name",
-        path.to_str().unwrap(),
-      ])?)?;
+    let mut temp = NamedTempFile::new()?;
+    temp.write(r#"{"1":0,"0":0}"#.as_bytes())?;
+    temp.flush()?;
 
-      assert_eq!(
-        fs::read_to_string(path)?,
-        r#"{
+    let path = temp.path().to_str().unwrap().to_owned();
+    run(Args::try_parse_from(["jsonsrt", "--sort-by-name", &path])?)?;
+    assert_eq!(
+      fs::read_to_string(&path)?,
+      r#"{
   "0": 0,
   "1": 0
 }
 "#
-        .to_owned()
-      );
-      Ok(())
-    })
+      .to_owned()
+    );
+    Ok(())
   }
 
   #[test]
   fn can_sort_by_value() -> Result<(), Box<dyn Error>> {
-    with_temp_file(r#"[{"x":1},{"x":0}]"#, |path| {
-      run(Args::try_parse_from([
-        "jsonsrt",
-        "--sort-by-value",
-        "x",
-        path.to_str().unwrap(),
-      ])?)?;
+    let mut temp = NamedTempFile::new()?;
+    temp.write(r#"[{"x":1},{"x":0}]"#.as_bytes())?;
+    temp.flush()?;
 
-      assert_eq!(
-        fs::read_to_string(path)?,
-        r#"[
+    let path = temp.path().to_str().unwrap().to_owned();
+    run(Args::try_parse_from([
+      "jsonsrt",
+      "--sort-by-value",
+      "x",
+      &path,
+    ])?)?;
+
+    assert_eq!(
+      fs::read_to_string(&path)?,
+      r#"[
   {
     "x": 0
   },
@@ -199,9 +193,8 @@ mod main_tests {
   }
 ]
 "#
-        .to_owned()
-      );
-      Ok(())
-    })
+      .to_owned()
+    );
+    Ok(())
   }
 }
